@@ -1,3 +1,6 @@
+# github上にマイルストーンを作成するスクリプト
+# 使うときは、config.pyと階層を合わせて、ACCESS_TOKENとREPO_NAMEを設定してください。
+
 from github import Github
 from config import ACCESS_TOKEN, REPO_NAME
 
