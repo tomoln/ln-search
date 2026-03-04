@@ -1,0 +1,8 @@
+# 仮想環境と秘密ファイルを無視
+venv/
+config.py
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
