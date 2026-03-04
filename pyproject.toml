@@ -1,0 +1,5 @@
+[project]
+name = "ln-search"
+version = "0.1.0"
+description = "A search tool"
+requires-python = ">=3.13,<3.14"
