@@ -1,0 +1,11 @@
+有効化
+venv\Scripts\activate
+
+requirementsを更新する
+pip freeze > requirements.txt
+
+2回目以降は
+git add .
+git commit -m "変更内容の説明"
+git push
+でOK

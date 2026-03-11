@@ -1,12 +1,9 @@
 import os
 from openai import OpenAI
-from dotenv import load_dotenv
-
-# .envファイルを読み込む
-load_dotenv()
+import config
 
 # APIキーを使ってクライアントを作成
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=config.OPENAI_API_KEY)
 
 # 利用可能なモデル一覧（必要に応じて追加・変更OK）
 available_models = {
