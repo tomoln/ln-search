@@ -29,6 +29,8 @@ def search_reddit_posts(
 
     # Apify 無料プランで利用可能な Reddit Scraper Actor
     # Actor ID: trudax/reddit-scraper-lite  (無料・軽量版)
+    # https://console.apify.com/actors/oAuCIx3ItNrs2okjQ/input
+    
     actor_id = "trudax/reddit-scraper-lite"
 
     run_input = {
