@@ -9,3 +9,20 @@ git add .
 git commit -m "更新"
 git push
 でOK
+
+プッシュ失敗
+git add -A
+
+エラーのあるコミットを確認
+下記値はログで出たコミットの値
+git show 1379f1d1e261e3d11897772453c5217bdfa424e5
+
+
+Copilot Chatを開く
+Ctrl + Alt + I
+
+コマンドパレットを開く
+Ctrl + Shift + P
+
+ステータスバーが消えた
+View → Appearance → Status Bar
