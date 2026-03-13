@@ -6,8 +6,11 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 STEP_NAME = "002_select_search_API"
 
@@ -123,15 +126,43 @@ def _is_free_tier_available(provider_name: str) -> bool:
 
 
 def _is_healthcheck_ok(provider_name: str, key_env: str) -> bool:
+    settings = load_settings()
+    allow_insecure_tls_fallback = bool(settings.get("allow_insecure_tls_fallback", True))
+    if allow_insecure_tls_fallback:
+        urllib3.disable_warnings(InsecureRequestWarning)
     api_key = os.getenv(key_env, "")
     if not api_key:
         return False
 
+    def _request_with_tls_fallback(method: str, url: str, **kwargs: Any) -> requests.Response:
+        try:
+            return requests.request(method=method, url=url, **kwargs)
+        except requests.exceptions.SSLError as error:
+            if not allow_insecure_tls_fallback:
+                raise
+            host = urlparse(url).hostname or "unknown-host"
+            if host not in {"google.serper.dev", "api.search.brave.com"}:
+                raise
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs["verify"] = False
+            return requests.request(method=method, url=url, **fallback_kwargs)
+
     provider = provider_name.strip().lower()
     try:
+        if provider == "brave":
+            response = _request_with_tls_fallback(
+                method="GET",
+                url="https://api.search.brave.com/res/v1/web/search",
+                headers={"X-Subscription-Token": api_key, "Accept": "application/json"},
+                params={"q": "healthcheck", "count": 1},
+                timeout=8,
+            )
+            return response.status_code == 200
+
         if provider == "serper":
-            response = requests.post(
-                "https://google.serper.dev/search",
+            response = _request_with_tls_fallback(
+                method="POST",
+                url="https://google.serper.dev/search",
                 headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
                 json={"q": "healthcheck", "num": 1},
                 timeout=8,
@@ -152,8 +183,10 @@ def _mask_key(key_value: str) -> str:
 def run_step(context: dict[str, Any]) -> dict[str, Any]:
     logger = get_logger(STEP_NAME)
     try:
+        settings = load_settings()
         paths = context["paths"]
         validate_inputs([paths["search_api_list"], paths["init_state"]])
+        allow_healthcheck_fallback = bool(settings.get("allow_search_api_healthcheck_fallback", True))
         candidates = sorted(
             _load_search_api_candidates(paths["search_api_list"]),
             key=lambda x: int(x.get("priority", 9999)),
@@ -173,8 +206,21 @@ def run_step(context: dict[str, Any]) -> dict[str, Any]:
             free_tier_ok = _is_free_tier_available(name)
             health_ok = _is_healthcheck_ok(name, key_env)
             if not health_ok:
-                logger.info("Skip %s: healthcheck failed", name)
-                continue
+                if not allow_healthcheck_fallback:
+                    logger.info("Skip %s: healthcheck failed", name)
+                    continue
+                logger.warning(
+                    "Healthcheck failed for %s, but selecting as fallback because allow_search_api_healthcheck_fallback=true",
+                    name,
+                )
+                selected = {
+                    "name": name,
+                    "key_env": key_env,
+                    "api_key_masked": _mask_key(key_value),
+                    "selected_reason": "fallback (healthcheck failed)",
+                    "selected_at": datetime.now(timezone.utc).isoformat(),
+                }
+                break
 
             reason = "free tier available" if free_tier_ok else "fallback (free tier unknown/exhausted)"
             selected = {

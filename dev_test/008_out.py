@@ -199,34 +199,39 @@ def run_step(context: dict[str, Any]) -> dict[str, Any]:
         partials: list[str] = []
         final = ""
         if llm_name == "openai":
-            api_key = os.getenv(key_env, "")
-            if not api_key:
-                raise RuntimeError(f"Missing environment variable: {key_env}")
+            try:
+                api_key = os.getenv(key_env, "")
+                if not api_key:
+                    raise RuntimeError(f"Missing environment variable: {key_env}")
 
-            client = OpenAI(api_key=api_key)
-            for chunk in chunks:
-                chunk_text = "\n\n".join(chunk)
-                partials.append(
-                    _openai_summarize(
-                        client=client,
-                        model=model,
-                        text=chunk_text,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        system_prompt=system_prompt,
-                        user_prompt_template=user_prompt_template,
+                client = OpenAI(api_key=api_key)
+                for chunk in chunks:
+                    chunk_text = "\n\n".join(chunk)
+                    partials.append(
+                        _openai_summarize(
+                            client=client,
+                            model=model,
+                            text=chunk_text,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            system_prompt=system_prompt,
+                            user_prompt_template=user_prompt_template,
+                        )
                     )
-                )
 
-            final = _openai_summarize(
-                client=client,
-                model=model,
-                text="\n\n".join(partials),
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system_prompt=system_prompt,
-                user_prompt_template=user_prompt_template,
-            )
+                final = _openai_summarize(
+                    client=client,
+                    model=model,
+                    text="\n\n".join(partials),
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system_prompt=system_prompt,
+                    user_prompt_template=user_prompt_template,
+                )
+            except Exception as error:
+                logger.warning("OpenAI summarization failed; fallback summarizer is used: %s", error)
+                partials = [_partial_summary(chunk, sentence_limit=6) for chunk in chunks]
+                final = _final_summary(partials, sentence_limit=sentence_limit)
         else:
             partials = [_partial_summary(chunk, sentence_limit=6) for chunk in chunks]
             final = _final_summary(partials, sentence_limit=sentence_limit)

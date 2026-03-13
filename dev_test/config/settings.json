@@ -5,6 +5,7 @@
   "max_results_per_query": 10,
   "score_threshold": 0.62,
   "request_timeout_sec": 20,
+  "allow_insecure_tls_fallback": true,
   "enable_js_render": false,
   "summary_sentence_limit": 12,
   "openai": {

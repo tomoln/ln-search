@@ -154,8 +154,10 @@ def _healthcheck_ok(provider_name: str, key_env: str, model: str) -> bool:
 def run_step(context: dict[str, Any]) -> dict[str, Any]:
     logger = get_logger(STEP_NAME)
     try:
+        settings = load_settings()
         paths = context["paths"]
         validate_inputs([paths["llm_list"], paths["init_state"]])
+        allow_healthcheck_fallback = bool(settings.get("allow_llm_healthcheck_fallback", True))
         candidates = sorted(
             _load_llm_candidates(paths["llm_list"]),
             key=lambda x: int(x.get("priority", 9999)),
@@ -175,8 +177,23 @@ def run_step(context: dict[str, Any]) -> dict[str, Any]:
                 logger.info("Skip %s: budget unavailable", name)
                 continue
             if not _healthcheck_ok(name, key_env, model):
-                logger.info("Skip %s: healthcheck failed", name)
-                continue
+                if not allow_healthcheck_fallback:
+                    logger.info("Skip %s: healthcheck failed", name)
+                    continue
+                logger.warning(
+                    "Healthcheck failed for %s, but selecting as fallback because allow_llm_healthcheck_fallback=true",
+                    name,
+                )
+                selected = {
+                    "name": name,
+                    "key_env": key_env,
+                    "model": model,
+                    "latency_hint_ms": llm.get("latency_hint_ms", None),
+                    "cost_hint_per_1k": llm.get("cost_hint_per_1k", None),
+                    "selected_reason": "fallback (healthcheck failed)",
+                    "selected_at": datetime.now(timezone.utc).isoformat(),
+                }
+                break
 
             selected = {
                 "name": name,

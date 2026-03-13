@@ -1,9 +1,14 @@
 {
   "apis": [
     {
+      "name": "brave",
+      "key_env": "SEARCH_API_BRAVE_KEY",
+      "priority": 1
+    },
+    {
       "name": "serper",
       "key_env": "SEARCH_API_SERPER_KEY",
-      "priority": 1
+      "priority": 2
     }
   ]
 }

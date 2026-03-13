@@ -7,8 +7,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 STEP_NAME = "003_get_url"
 
@@ -121,10 +124,25 @@ def _search_with_serper(
     connect_timeout = min(5, max(1, timeout_sec))
     read_timeout = max(1, timeout_sec)
 
+    allow_insecure_tls_fallback = bool(load_settings().get("allow_insecure_tls_fallback", True))
+
+    def _request_with_tls_fallback(url: str, **kwargs: Any) -> requests.Response:
+        try:
+            return requests.post(url, **kwargs)
+        except requests.exceptions.SSLError:
+            if not allow_insecure_tls_fallback:
+                raise
+            host = urlparse(url).hostname or "unknown-host"
+            if host != "google.serper.dev":
+                raise
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs["verify"] = False
+            return requests.post(url, **fallback_kwargs)
+
     response: requests.Response | None = None
     for attempt in range(1, max_retries + 1):
         try:
-            response = requests.post(
+            response = _request_with_tls_fallback(
                 endpoint,
                 headers=headers,
                 json=payload,
@@ -170,6 +188,85 @@ def _search_with_serper(
     return records
 
 
+def _search_with_brave(
+    api_key: str,
+    query: str,
+    max_results: int,
+    timeout_sec: int,
+    max_retries: int,
+    logger: logging.Logger,
+) -> list[dict[str, Any]]:
+    endpoint = "https://api.search.brave.com/res/v1/web/search"
+    headers = {"X-Subscription-Token": api_key, "Accept": "application/json"}
+    params = {"q": query, "count": max_results}
+    connect_timeout = min(5, max(1, timeout_sec))
+    read_timeout = max(1, timeout_sec)
+
+    allow_insecure_tls_fallback = bool(load_settings().get("allow_insecure_tls_fallback", True))
+
+    def _request_with_tls_fallback(url: str, **kwargs: Any) -> requests.Response:
+        try:
+            return requests.get(url, **kwargs)
+        except requests.exceptions.SSLError:
+            if not allow_insecure_tls_fallback:
+                raise
+            host = urlparse(url).hostname or "unknown-host"
+            if host != "api.search.brave.com":
+                raise
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs["verify"] = False
+            return requests.get(url, **fallback_kwargs)
+
+    response: requests.Response | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = _request_with_tls_fallback(
+                endpoint,
+                headers=headers,
+                params=params,
+                timeout=(connect_timeout, read_timeout),
+            )
+            if response.status_code == 429 and attempt < max_retries:
+                wait_sec = min(2 ** (attempt - 1), 4)
+                logger.warning("Brave rate-limited (429). Retrying in %ss.", wait_sec)
+                time.sleep(wait_sec)
+                continue
+            response.raise_for_status()
+            break
+        except requests.Timeout as error:
+            if attempt >= max_retries:
+                raise TimeoutError(f"Brave request timed out after {max_retries} attempts") from error
+            wait_sec = min(2 ** (attempt - 1), 4)
+            logger.warning("Brave timeout. Retrying in %ss (attempt %s/%s).", wait_sec, attempt + 1, max_retries)
+            time.sleep(wait_sec)
+        except requests.RequestException as error:
+            status_code = getattr(getattr(error, "response", None), "status_code", None)
+            if status_code in {500, 502, 503, 504} and attempt < max_retries:
+                wait_sec = min(2 ** (attempt - 1), 4)
+                logger.warning("Brave HTTP %s. Retrying in %ss.", status_code, wait_sec)
+                time.sleep(wait_sec)
+                continue
+            raise
+
+    if response is None:
+        return []
+
+    data = response.json()
+    web = data.get("web", {}) if isinstance(data, dict) else {}
+    results = web.get("results", []) if isinstance(web, dict) else []
+    records: list[dict[str, Any]] = []
+    for index, item in enumerate(results, start=1):
+        records.append(
+            {
+                "rank": index,
+                "url": item.get("url", ""),
+                "title": item.get("title", ""),
+                "snippet": item.get("description", ""),
+            }
+        )
+    return records
+
+
 def _perform_search(
     provider_name: str,
     key_env: str,
@@ -185,6 +282,8 @@ def _perform_search(
         return []
 
     provider = provider_name.strip().lower()
+    if provider == "brave":
+        return _search_with_brave(api_key, query, max_results, timeout_sec, max_retries, logger)
     if provider == "serper":
         return _search_with_serper(api_key, query, max_results, timeout_sec, max_retries, logger)
     return []
@@ -194,6 +293,8 @@ def run_step(context: dict[str, Any]) -> dict[str, Any]:
     logger = get_logger(STEP_NAME)
     try:
         settings = load_settings()
+        if bool(settings.get("allow_insecure_tls_fallback", True)):
+            urllib3.disable_warnings(InsecureRequestWarning)
         paths = context["paths"]
         validate_inputs([paths["input_queries"], paths["selected_api"]])
 

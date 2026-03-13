@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from env_bootstrap import bootstrap_runtime_env
+
 STEP_FILES = [
     "001_initialize.py",
     "002_select_search_API.py",
@@ -90,6 +92,13 @@ def run_pipeline() -> dict[str, Any]:
     logger = get_logger("000_run_pipeline")
     context = load_context()
     context["paths"]["output_dir"].mkdir(parents=True, exist_ok=True)
+
+    env_info = bootstrap_runtime_env(context["paths"]["project_root"])
+    for loaded in env_info.get("loaded_env_files", []):
+        logger.info("Loaded environment variables from %s", loaded)
+    injected_keys = env_info.get("injected_keys", [])
+    if injected_keys:
+        logger.info("Injected runtime env keys from legacy config: %s", ", ".join(injected_keys))
 
     executed_steps: list[dict[str, Any]] = []
     for step_file in STEP_FILES:

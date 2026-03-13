@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 STEP_NAME = "006_scraping"
 
@@ -104,10 +106,28 @@ def handle_step_error(step_name: str, error: Exception) -> None:
     raise
 
 
+def _fetch_html(
+    url: str,
+    timeout: int,
+    allow_insecure_tls_fallback: bool,
+) -> requests.Response:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; ln-search/1.0)"}
+    try:
+        return requests.get(url, timeout=timeout, headers=headers)
+    except requests.exceptions.SSLError:
+        if not allow_insecure_tls_fallback:
+            raise
+        # Retry once without certificate verification only when TLS validation fails.
+        return requests.get(url, timeout=timeout, headers=headers, verify=False)
+
+
 def run_step(context: dict[str, Any]) -> dict[str, Any]:
     logger = get_logger(STEP_NAME)
     try:
         settings = load_settings()
+        allow_insecure_tls_fallback = bool(settings.get("allow_insecure_tls_fallback", True))
+        if allow_insecure_tls_fallback:
+            urllib3.disable_warnings(InsecureRequestWarning)
         paths = context["paths"]
         validate_inputs([paths["scored_records"]])
         scored = read_jsonl(paths["scored_records"])
@@ -125,11 +145,7 @@ def run_step(context: dict[str, Any]) -> dict[str, Any]:
             if not url:
                 continue
             try:
-                response = requests.get(
-                    url,
-                    timeout=timeout,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; ln-search/1.0)"},
-                )
+                response = _fetch_html(url=url, timeout=timeout, allow_insecure_tls_fallback=allow_insecure_tls_fallback)
                 safe_html = response.text.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
                 scrape_records.append(
                     {
