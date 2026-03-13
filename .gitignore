@@ -5,4 +5,10 @@ __pycache__/
 *.pyo
 *.pyd
 .env
-dev-test/config.py
+dev_old/config.py
+dev_test/io/tmp/
+dev_test/io/output/
+dev_test/logs/
+.log
+.env.
+!.env.example

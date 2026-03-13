@@ -1,0 +1,16 @@
+{
+  "clear_tmp_on_start": true,
+  "clear_output_on_start": true,
+  "required_libraries": ["requests", "bs4", "trafilatura", "openai"],
+  "max_results_per_query": 10,
+  "score_threshold": 0.62,
+  "request_timeout_sec": 20,
+  "enable_js_render": false,
+  "summary_sentence_limit": 12,
+  "openai": {
+    "model_for_healthcheck": "gpt-4o-mini",
+    "model_for_summary": "gpt-4o-mini",
+    "temperature": 0.2,
+    "max_tokens": 1200
+  }
+}

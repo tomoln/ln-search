@@ -1,0 +1,12 @@
+{
+  "llms": [
+    {
+      "name": "openai",
+      "key_env": "LLM_API_OPENAI_KEY",
+      "model": "gpt-4o-mini",
+      "priority": 1,
+      "latency_hint_ms": 1200,
+      "cost_hint_per_1k": 0.0003
+    }
+  ]
+}

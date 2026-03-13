@@ -1,0 +1,9 @@
+{
+  "apis": [
+    {
+      "name": "serper",
+      "key_env": "SEARCH_API_SERPER_KEY",
+      "priority": 1
+    }
+  ]
+}
