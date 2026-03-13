@@ -13,6 +13,12 @@ git push
 プッシュ失敗
 git add -A
 
+やり直す
+git reset --soft origin/main
+git add -A
+git commit -m "update"
+git push
+
 エラーのあるコミットを確認
 下記値はログで出たコミットの値
 git show 1379f1d1e261e3d11897772453c5217bdfa424e5
